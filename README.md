@@ -156,8 +156,8 @@ Indian Bank Phishing Domain Monitor/
 ### 2. Clone and Setup Environment
 ```bash
 # Clone repository
-git clone https://github.com/aryarakshit/indian-bank-phishing-domain-monitor.git
-cd "indian-bank-phishing-domain-monitor"
+git clone https://github.com/aryarakshit/Indian-Bank-Phishing-Domain-Monitor.git
+cd "Indian-Bank-Phishing-Domain-Monitor"
 
 # Create virtual environment
 python -m venv .venv
