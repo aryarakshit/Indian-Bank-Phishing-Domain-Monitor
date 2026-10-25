@@ -1,0 +1,20 @@
+[Unit]
+Description=Indian Bank Phishing Threat Intelligence Dashboard
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=phishmon
+Group=phishmon
+WorkingDirectory=/opt/indian-bank-phishing-domain-monitor
+EnvironmentFile=/opt/indian-bank-phishing-domain-monitor/.env
+ExecStart=/opt/indian-bank-phishing-domain-monitor/.venv/bin/python -m src.main --dashboard --host 0.0.0.0 --port 8080
+Restart=always
+RestartSec=5
+LimitNOFILE=65535
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

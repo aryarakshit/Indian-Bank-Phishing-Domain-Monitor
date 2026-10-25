@@ -1,0 +1,51 @@
+services:
+  # Real-time CertStream ingestion and threat triage daemon
+  phishing-monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: indian-bank-phishing-monitor
+    restart: unless-stopped
+    command: ["--stream"]
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATABASE_PATH=/app/data/detections.db
+      - REPORTS_DIR=/app/reports
+    volumes:
+      - monitor-data:/app/data
+      - monitor-reports:/app/reports
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /app/data/detections.db || exit 0"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Web-based Threat Intelligence & Visual Analytics Dashboard
+  phishing-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: indian-bank-phishing-dashboard
+    restart: unless-stopped
+    command: ["--dashboard", "--host", "0.0.0.0", "--port", "8080"]
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATABASE_PATH=/app/data/detections.db
+      - REPORTS_DIR=/app/reports
+    ports:
+      - "8080:8080"
+    volumes:
+      - monitor-data:/app/data:ro
+      - monitor-reports:/app/reports:ro
+    depends_on:
+      - phishing-monitor
+
+volumes:
+  monitor-data:
+    name: indian-bank-phishing-data
+  monitor-reports:
+    name: indian-bank-phishing-reports

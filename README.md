@@ -1,10 +1,11 @@
 # 🛡️ Indian Bank Phishing Domain Monitor
 
 [![Python Version](https://img.shields.io/badge/python-3.12%20%7C%203.14-blue.svg)](https://www.python.org/)
-[![Tests Status](https://img.shields.io/badge/tests-23%20passed-brightgreen.svg)](tests/)
+[![Tests Status](https://img.shields.io/badge/tests-26%20passed-brightgreen.svg)](tests/)
 [![Code Style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![Storage: SQLite WAL](https://img.shields.io/badge/database-SQLite%20WAL-orange.svg)](src/storage/)
 [![Async Architecture](https://img.shields.io/badge/architecture-asyncio%20%7C%20websockets-yellow.svg)](src/ingestion/)
+[![Docker Ready](https://img.shields.io/badge/docker-ready-2496ED.svg?logo=docker&logoColor=white)](Dockerfile)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 An enterprise-grade, real-time **Certificate Transparency (CT) phishing detection and forensic analysis engine** engineered specifically for Indian banking institutions, fintech platforms, and Unified Payments Interface (UPI) payment gateways.
@@ -64,13 +65,15 @@ flowchart TD
         N --> P["Capture DOM, Redirect Chains, Screenshots"]
     end
 
-    subgraph PERSISTENCE["5. PERSISTENCE & ALERTS"]
+    subgraph PERSISTENCE["5. PERSISTENCE, DASHBOARD & ALERTS"]
         O --> Q["SQLite Database (detections.db)<br/>WAL Mode, Indexed by Domain & Timestamp"]
         P --> Q
         
-        Q --> R{"Alert Router"}
+        Q --> R{"Alert & Visual Analytics Router"}
         R --> S["Real-Time Webhook Dispatch<br/>(Telegram Bot / Discord Webhook)"]
         R --> T["Automated Cron / CLI (00:00 UTC)<br/>Daily Markdown Report (reports/daily_*.md)"]
+        R --> U["Web Visual Analytics Dashboard<br/>(http://localhost:8080 & Chart.js)"]
+        R --> V["Automated CERT-In / Registrar<br/>Abuse Takedown Packet Generator"]
     end
 ```
 
@@ -95,6 +98,9 @@ flowchart TD
 * **Non-Blocking Forensic Enrichment**: Asynchronous DNS resolution (A, AAAA, NS, MX) using `dnspython` and optional sandbox submission to `urlscan.io` for headless DOM inspection and screenshot capture.
 * **Concurrent Storage**: SQLite database running in Write-Ahead Logging (`PRAGMA journal_mode=WAL;`) mode with short-lived per-operation connections, so the stream and report readers don't block each other.
 * **Automated Daily Audit Reports**: Automatically compiles 24-hour summary reports detailing threat volume, targeted brand distributions, top threat keywords, and abuse TLDs.
+* **Real-Time Visual Threat Dashboard**: Modern dark-theme web dashboard (`python -m src.main --dashboard`) powered by `aiohttp.web` and Chart.js featuring interactive brand telemetry distributions, risk score dials, searchable forensic records, and live metrics.
+* **Instant CERT-In / Registrar Takedown Generator**: One-click generation of RFC-compliant abuse notification notices populated with technical telemetry (FQDN, brand, score, resolved IPs, nameservers, triggered heuristics) ready to transmit to domain registrars and CERT-In (`incident@cert-in.org.in`).
+* **Turnkey Containerization & Daemon Supervision**: Production-ready multi-stage `Dockerfile`, `docker-compose.yml` orchestrating dual monitor and dashboard services, and Linux `systemd` service units (`deploy/`).
 
 ---
 
@@ -102,6 +108,9 @@ flowchart TD
 
 ```text
 Indian Bank Phishing Domain Monitor/
+├── deploy/                        # Production daemon service configurations
+│   ├── phishing-monitor.service   # Systemd unit for 24/7 background monitor
+│   └── phishing-dashboard.service # Systemd unit for web visual analytics
 ├── reports/                       # Generated daily markdown audit reports
 ├── src/                           # Application source code
 │   ├── __init__.py
@@ -110,6 +119,9 @@ Indian Bank Phishing Domain Monitor/
 │   ├── models.py                  # Pydantic data schemas (TriageResult, EnrichedDetection)
 │   ├── alerts/                    # Webhook notifications
 │   │   ├── dispatcher.py          # Telegram & Discord webhook delivery
+│   │   └── __init__.py
+│   ├── dashboard/                 # Visual analytics & web interface
+│   │   ├── app.py                 # aiohttp.web server, Chart.js templates & takedown API
 │   │   └── __init__.py
 │   ├── enrichment/                # Passive DNS & sandbox enrichment
 │   │   ├── dns_resolver.py        # Asynchronous dnspython resolver
@@ -135,11 +147,14 @@ Indian Bank Phishing Domain Monitor/
 │       └── __init__.py
 ├── tests/                         # Automated test suite (pytest)
 │   ├── test_alerts_reports.py
+│   ├── test_dashboard.py              # Visual analytics & takedown generator tests
 │   ├── test_end_to_end.py
 │   ├── test_enrichment.py
 │   ├── test_ingestion.py
 │   ├── test_storage.py
 │   └── test_triage.py
+├── Dockerfile                     # Multi-stage production container
+├── docker-compose.yml             # Dual monitor and dashboard orchestration
 ├── pyproject.toml                 # Ruff and Pytest project configuration
 ├── requirements.txt               # Production dependencies
 └── README.md                      # Documentation
@@ -310,6 +325,61 @@ python -m src.main --daily-report 2026-10-19
 ```
 *Reports are stored under `reports/daily_YYYY-MM-DD.md`.*
 
+### 6. Launch Web Visual Analytics Dashboard
+Start the real-time SOC threat intelligence dashboard with interactive Chart.js visualizations and CERT-In takedown packet export:
+
+```bash
+python -m src.main --dashboard --port 8080 --host 127.0.0.1
+```
+Open **`http://localhost:8080`** in any web browser to view:
+* **Real-time Threat Telemetry:** Total intercepted phishing domains, critical risk count, and average severity.
+* **Target Brand Distribution:** Doughnut chart breaking down attacks across SBI, HDFC, ICICI, Paytm, and UPI gateways.
+* **Top Abuse Keywords:** Bar chart highlighting prevalent lures (`kyc`, `pan`, `refund`, `login`, `apk`).
+* **Live Searchable Threat Table:** Instant client-side search by brand, domain, or keyword.
+* **One-Click Takedown Generator:** Click **"Takedown Notice"** on any threat to generate an RFC-compliant abuse packet ready to transmit to domain registrars and CERT-In (`incident@cert-in.org.in`).
+
+---
+
+## 🐳 Docker & Production Daemon Deployment
+
+### 1. Docker Compose (Turnkey Setup)
+The project bundles a production-ready `Dockerfile` and `docker-compose.yml` orchestrating both the ingestion monitor and the visual dashboard:
+
+```bash
+# Copy and configure environment variables
+cp .env.example .env
+
+# Build and start services in the background
+docker compose up -d
+
+# Check service status and healthchecks
+docker compose ps
+
+# View live CT stream logs
+docker compose logs -f phishing-monitor
+
+# Access dashboard in your browser
+# URL: http://localhost:8080
+```
+
+### 2. Linux Systemd Service Supervision (VPS / Cloud VM)
+Production service unit templates are provided in the [`deploy/`](deploy/) directory:
+
+```bash
+# Copy systemd units to system directory
+sudo cp deploy/phishing-monitor.service /etc/systemd/system/
+sudo cp deploy/phishing-dashboard.service /etc/systemd/system/
+
+# Reload systemd and enable services on boot
+sudo systemctl daemon-reload
+sudo systemctl enable --now phishing-monitor.service
+sudo systemctl enable --now phishing-dashboard.service
+
+# Check service status and logs
+sudo systemctl status phishing-monitor.service
+journalctl -u phishing-monitor.service -f
+```
+
 ---
 
 ## 🧪 Testing & Code Quality Gates
@@ -317,7 +387,7 @@ python -m src.main --daily-report 2026-10-19
 Automated quality standards are enforced via `pytest` and `ruff`:
 
 ```bash
-# Execute unit and integration tests (23 tests)
+# Execute unit and integration tests (26 tests)
 pytest -v
 
 # Run static linter
@@ -333,31 +403,33 @@ ruff format src tests
 ### Automated Test Suite Execution
 
 ```text
-tests/test_alerts_reports.py::test_alert_dispatcher_simulation PASSED    [  4%]
-tests/test_alerts_reports.py::test_daily_report_generator PASSED         [  8%]
-tests/test_end_to_end.py::test_end_to_end_pipeline PASSED                [ 13%]
-tests/test_enrichment.py::test_dns_resolver_nonexistent_domain PASSED    [ 17%]
-tests/test_enrichment.py::test_urlscan_client_disabled PASSED            [ 21%]
-tests/test_enrichment.py::test_enrichment_pipeline PASSED                [ 26%]
-tests/test_ingestion.py::test_clean_domain PASSED                        [ 30%]
-tests/test_ingestion.py::test_extract_domains_from_cert PASSED           [ 34%]
-tests/test_ingestion.py::test_extract_domains_empty_or_malformed PASSED  [ 39%]
-tests/test_ingestion.py::test_switches_to_fallback_feed_when_primary_sends_only_heartbeats PASSED [ 43%]
-tests/test_ingestion.py::test_fallback_feeds_are_read_from_a_comma_separated_setting PASSED [ 47%]
-tests/test_storage.py::test_db_wal_mode PASSED                           [ 52%]
-tests/test_storage.py::test_save_and_retrieve_detection PASSED           [ 56%]
-tests/test_storage.py::test_get_recent_detections PASSED                 [ 60%]
-tests/test_triage.py::test_whitelist_official_domains PASSED             [ 65%]
-tests/test_triage.py::test_obvious_phishing_domains PASSED               [ 69%]
-tests/test_triage.py::test_homoglyphs_and_punycode PASSED                [ 73%]
-tests/test_triage.py::test_leetspeak_detection PASSED                    [ 78%]
-tests/test_triage.py::test_benign_domains_not_flagged PASSED             [ 82%]
-tests/test_triage.py::test_ambiguous_aliases_inside_ordinary_words_are_not_brand_matches PASSED [ 86%]
-tests/test_triage.py::test_ambiguous_aliases_still_match_as_their_own_token PASSED [ 91%]
-tests/test_triage.py::test_ambiguous_alias_inside_a_word_matches_when_banking_context_is_present PASSED [ 95%]
+tests/test_alerts_reports.py::test_alert_dispatcher_simulation PASSED    [  7%]
+tests/test_dashboard.py::test_dashboard_index PASSED                     [ 11%]
+tests/test_dashboard.py::test_dashboard_stats_and_detections PASSED     [ 15%]
+tests/test_dashboard.py::test_generate_takedown_notice_content PASSED   [ 19%]
+tests/test_end_to_end.py::test_end_to_end_pipeline PASSED                [ 23%]
+tests/test_enrichment.py::test_dns_resolver_nonexistent_domain PASSED    [ 26%]
+tests/test_enrichment.py::test_urlscan_client_disabled PASSED            [ 30%]
+tests/test_enrichment.py::test_enrichment_pipeline PASSED                [ 34%]
+tests/test_ingestion.py::test_clean_domain PASSED                        [ 38%]
+tests/test_ingestion.py::test_extract_domains_from_cert PASSED           [ 42%]
+tests/test_ingestion.py::test_extract_domains_empty_or_malformed PASSED  [ 46%]
+tests/test_ingestion.py::test_switches_to_fallback_feed_when_primary_sends_only_heartbeats PASSED [ 50%]
+tests/test_ingestion.py::test_fallback_feeds_are_read_from_a_comma_separated_setting PASSED [ 53%]
+tests/test_storage.py::test_db_wal_mode PASSED                           [ 57%]
+tests/test_storage.py::test_save_and_retrieve_detection PASSED           [ 61%]
+tests/test_storage.py::test_get_recent_detections PASSED                 [ 65%]
+tests/test_triage.py::test_whitelist_official_domains PASSED             [ 69%]
+tests/test_triage.py::test_obvious_phishing_domains PASSED               [ 73%]
+tests/test_triage.py::test_homoglyphs_and_punycode PASSED                [ 76%]
+tests/test_triage.py::test_leetspeak_detection PASSED                    [ 80%]
+tests/test_benign_domains_not_flagged PASSED                              [ 84%]
+tests/test_triage.py::test_ambiguous_aliases_inside_ordinary_words_are_not_brand_matches PASSED [ 88%]
+tests/test_triage.py::test_ambiguous_aliases_still_match_as_their_own_token PASSED [ 92%]
+tests/test_triage.py::test_ambiguous_alias_inside_a_word_matches_when_banking_context_is_present PASSED [ 96%]
 tests/test_triage.py::test_axis_communications_login_subdomain_is_not_flagged PASSED [100%]
 
-============================= 23 passed in 2.59s ==============================
+============================= 26 passed in 2.80s ==============================
 ```
 
 ---
@@ -437,9 +509,9 @@ The project follows a phased engineering roadmap:
 - [x] **CLI Orchestration**: Commands for streaming, file batches, single domains, and historical queries.
 - [x] **Verification**: End-to-end integration tests and zero-defect linting/formatting pass.
 
-### Phase 6–7: Infrastructure & Visual Analytics (Active Development)
-- [ ] **Daemon & Container Packaging**: Multi-stage Docker image, docker-compose orchestration, and systemd service unit.
-- [ ] **Threat Intelligence Dashboard**: Lightweight web dashboard for live telemetry, geographical threat mapping, and takedown packet export.
+### Phase 6–7: Infrastructure & Visual Analytics (Shipped & Verified)
+- [x] **Daemon & Container Packaging**: Multi-stage Docker image, docker-compose orchestration, and Linux systemd service units (`deploy/`).
+- [x] **Threat Intelligence Dashboard**: Lightweight web dashboard (`python -m src.main --dashboard`) with Chart.js brand/threat distributions, searchable detection feed, and one-click CERT-In takedown packet export.
 
 ---
 

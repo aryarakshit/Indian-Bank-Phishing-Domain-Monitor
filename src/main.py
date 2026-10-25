@@ -166,6 +166,22 @@ def parse_arguments() -> argparse.Namespace:
         help="Display the most recent N flagged detections.",
     )
     parser.add_argument(
+        "--dashboard",
+        action="store_true",
+        help="Run real-time web visual analytics and threat intelligence dashboard.",
+    )
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host address to bind dashboard server (default: 127.0.0.1).",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8080,
+        help="Port number to bind dashboard server (default: 8080).",
+    )
+    parser.add_argument(
         "--threshold",
         type=int,
         default=60,
@@ -280,7 +296,28 @@ async def async_main() -> None:
         print(f"[+] Daily report successfully generated: {report_file}")
         return
 
-    # Mode 5: Stream monitor (default if --stream provided or fallback)
+    # Mode 5: Visual Threat Intelligence Dashboard
+    if args.dashboard:
+        from aiohttp import web
+
+        from .dashboard.app import create_dashboard_app
+
+        app = create_dashboard_app(config=config, db_manager=monitor.db)
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, args.host, args.port)
+        print(
+            f"\n[+] Starting Indian Bank Phishing Visual Dashboard at http://{args.host}:{args.port}"
+        )
+        await site.start()
+        try:
+            while True:
+                await asyncio.sleep(3600)
+        finally:
+            await runner.cleanup()
+        return
+
+    # Mode 6: Stream monitor (default if --stream provided or fallback)
     if args.stream:
         loop = asyncio.get_running_loop()
 
@@ -304,6 +341,7 @@ async def async_main() -> None:
     print("Quick examples:")
     print("  python -m src.main --domain sbi-kyc-update-pan.top")
     print("  python -m src.main --stream")
+    print("  python -m src.main --dashboard --port 8080")
     print("  python -m src.main --recent 10")
     print("  python -m src.main --daily-report\n")
 
