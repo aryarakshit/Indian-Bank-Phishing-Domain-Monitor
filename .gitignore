@@ -1,0 +1,39 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Claude & Antigravity locals
+CLAUDE.local.md
+.claude/settings.local.json
+docs/handoff/
+.agents/
+.claude/
+.planning/
+
+
+# Secrets and local config
+.env
+*.env
+*.local
+
+# Database & runtime persistence
+*.db
+*.db-wal
+*.db-shm
+detections.db*
+
+# Reports and logs (keep folder structure, ignore generated dumps if desired)
+reports/*.pdf
+
+# Testing & Coverage
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
